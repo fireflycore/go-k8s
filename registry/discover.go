@@ -43,8 +43,8 @@ type DiscoverInstance struct {
 
 const defaultNodeWeight = 100
 
-// NewDiscover 创建 K8s 发现器实例。
-func NewDiscover(client kubernetes.Interface, meta *micro.Meta, conf *ServiceConf) (*DiscoverInstance, error) {
+// NewDiscover 创建 K8s 发现器实例并返回统一发现接口。
+func NewDiscover(client kubernetes.Interface, meta *micro.Meta, conf *ServiceConf) (micro.Discovery, error) {
 	if client == nil {
 		return nil, fmt.Errorf(micro.ErrClientIsNilFormat, "k8s")
 	}

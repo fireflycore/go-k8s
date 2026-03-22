@@ -17,8 +17,8 @@ type RegisterInstance struct {
 	conf   *ServiceConf
 }
 
-// NewRegister 创建 K8s 注册器实例。
-func NewRegister(client kubernetes.Interface, meta *micro.Meta, conf *ServiceConf) (*RegisterInstance, error) {
+// NewRegister 创建 K8s 注册器实例并返回统一注册接口。
+func NewRegister(client kubernetes.Interface, meta *micro.Meta, conf *ServiceConf) (micro.Register, error) {
 	if client == nil {
 		return nil, fmt.Errorf(micro.ErrClientIsNilFormat, "k8s")
 	}
