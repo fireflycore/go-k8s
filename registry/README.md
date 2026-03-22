@@ -32,6 +32,7 @@
 - `Add/Update/Delete` 事件触发后会刷新两级缓存：
   - `method -> appId`
   - `appId -> []*ServiceNode`
+- 事件增删判定以 `app_id + instance_id` 为准，不保留旧判定路径。
 
 ## 网关示例
 

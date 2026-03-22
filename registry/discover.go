@@ -20,12 +20,12 @@ type DiscoverInstance struct {
 	// client 是 Kubernetes 客户端。
 	client kubernetes.Interface
 	// meta 是环境元数据模板。
-	meta   *micro.Meta
+	meta *micro.Meta
 	// conf 是发现配置。
-	conf   *ServiceConf
+	conf *ServiceConf
 
 	// method 保存 method -> appId 映射。
-	method  micro.ServiceMethod
+	method micro.ServiceMethod
 	// service 保存 appId -> nodes 映射。
 	service micro.ServiceDiscover
 
@@ -35,7 +35,7 @@ type DiscoverInstance struct {
 	// stopCh 用于停止 Watcher。
 	stopCh chan struct{}
 	// once 确保 stopCh 只关闭一次。
-	once   sync.Once
+	once sync.Once
 
 	// watchEventCallback 用于向外透传服务变更事件。
 	watchEventCallback micro.WatchEventFunc
@@ -205,9 +205,10 @@ func (s *DiscoverInstance) resolveFromEndpoints(appID string) ([]*micro.ServiceN
 // buildNodeFromService 基于 Service 构造一个逻辑节点。
 func buildNodeFromService(meta *micro.Meta, conf *ServiceConf, internal, appID string, svc *corev1.Service) *micro.ServiceNode {
 	nodeMeta := &micro.Meta{
-		Env:     meta.Env,
-		AppId:   appID,
-		Version: meta.Version,
+		Env:        meta.Env,
+		AppId:      appID,
+		InstanceId: meta.InstanceId,
+		Version:    meta.Version,
 	}
 	node := &micro.ServiceNode{
 		Weight:  defaultNodeWeight,
@@ -236,9 +237,10 @@ func buildNodeFromEndpoint(meta *micro.Meta, conf *ServiceConf, internal, appID 
 	return &micro.ServiceNode{
 		Weight: defaultNodeWeight,
 		Meta: &micro.Meta{
-			Env:     meta.Env,
-			AppId:   appID,
-			Version: meta.Version,
+			Env:        meta.Env,
+			AppId:      appID,
+			InstanceId: meta.InstanceId,
+			Version:    meta.Version,
 		},
 		Methods: map[string]bool{},
 		Network: &micro.Network{
@@ -274,49 +276,79 @@ func (s *DiscoverInstance) dispatchEvents(events []micro.ServiceEvent) {
 }
 
 func buildDiscoveryEvents(before, after micro.ServiceDiscover) []micro.ServiceEvent {
-	events := make([]micro.ServiceEvent, 0, len(before)+len(after))
-	for appID, nodes := range after {
-		prev, ok := before[appID]
+	beforeMap := flattenDiscoveryMap(before)
+	afterMap := flattenDiscoveryMap(after)
+	events := make([]micro.ServiceEvent, 0, len(beforeMap)+len(afterMap))
+
+	for key, next := range afterMap {
+		prev, ok := beforeMap[key]
 		if !ok {
-			for _, node := range nodes {
-				events = append(events, micro.ServiceEvent{Type: micro.EventAdd, Service: node})
-			}
+			events = append(events, micro.ServiceEvent{Type: micro.EventAdd, Service: next})
 			continue
 		}
-		if !sameDiscoveryNodes(prev, nodes) {
-			for _, node := range nodes {
-				events = append(events, micro.ServiceEvent{Type: micro.EventUpdate, Service: node})
-			}
+		if !sameDiscoveryNodeForEvent(prev, next) {
+			events = append(events, micro.ServiceEvent{Type: micro.EventUpdate, Service: next})
 		}
 	}
-
-	for appID, nodes := range before {
-		if _, ok := after[appID]; ok {
+	for key, prev := range beforeMap {
+		if _, ok := afterMap[key]; ok {
 			continue
 		}
-		for _, node := range nodes {
-			events = append(events, micro.ServiceEvent{Type: micro.EventDelete, Service: node})
-		}
+		events = append(events, micro.ServiceEvent{Type: micro.EventDelete, Service: prev})
 	}
 	return events
 }
 
-func sameDiscoveryNodes(left, right []*micro.ServiceNode) bool {
-	if len(left) != len(right) {
+func flattenDiscoveryMap(discover micro.ServiceDiscover) map[string]*micro.ServiceNode {
+	raw := make(map[string]*micro.ServiceNode)
+	for _, nodes := range discover {
+		for _, node := range nodes {
+			key := discoveryInstanceKey(node)
+			if key == "" {
+				continue
+			}
+			raw[key] = node
+		}
+	}
+	return raw
+}
+
+func discoveryInstanceKey(node *micro.ServiceNode) string {
+	if node == nil || node.Meta == nil {
+		return ""
+	}
+	if node.Meta.AppId == "" || node.Meta.InstanceId == "" {
+		return ""
+	}
+	return node.Meta.AppId + "|" + node.Meta.InstanceId
+}
+
+func sameDiscoveryNodeForEvent(left, right *micro.ServiceNode) bool {
+	if left == nil || right == nil || left.Meta == nil || right.Meta == nil {
 		return false
 	}
-	lm := make(map[string]struct{}, len(left))
-	for _, item := range left {
-		if item == nil || item.Meta == nil || item.Network == nil {
-			continue
-		}
-		lm[item.Meta.AppId+"|"+item.Meta.InstanceId+"|"+item.Network.Internal] = struct{}{}
+	if left.Meta.AppId != right.Meta.AppId ||
+		left.Meta.InstanceId != right.Meta.InstanceId ||
+		left.Meta.Env != right.Meta.Env ||
+		left.Meta.Version != right.Meta.Version {
+		return false
 	}
-	for _, item := range right {
-		if item == nil || item.Meta == nil || item.Network == nil {
-			continue
-		}
-		if _, ok := lm[item.Meta.AppId+"|"+item.Meta.InstanceId+"|"+item.Network.Internal]; !ok {
+	if left.Network == nil || right.Network == nil {
+		return false
+	}
+	if left.Network.Internal != right.Network.Internal ||
+		left.Network.External != right.Network.External ||
+		left.Network.SN != right.Network.SN {
+		return false
+	}
+	if left.Weight != right.Weight || left.RunDate != right.RunDate {
+		return false
+	}
+	if len(left.Methods) != len(right.Methods) {
+		return false
+	}
+	for method := range left.Methods {
+		if !right.Methods[method] {
 			return false
 		}
 	}
