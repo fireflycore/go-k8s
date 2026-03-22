@@ -12,24 +12,35 @@ import (
 	micro "github.com/fireflycore/go-micro/registry"
 )
 
+// DiscoverInstance 封装 K8s 场景下的服务发现逻辑。
 type DiscoverInstance struct {
+	// mu 保护 method/service 索引的一致性。
 	mu sync.RWMutex
 
+	// client 是 Kubernetes 客户端。
 	client kubernetes.Interface
+	// meta 是环境元数据模板。
 	meta   *micro.Meta
+	// conf 是发现配置。
 	conf   *ServiceConf
 
+	// method 保存 method -> appId 映射。
 	method  micro.ServiceMethod
+	// service 保存 appId -> nodes 映射。
 	service micro.ServiceDiscover
 
+	// informer 监听 Service 或 Endpoints 变更。
 	informer cache.SharedIndexInformer
 
+	// stopCh 用于停止 Watcher。
 	stopCh chan struct{}
+	// once 确保 stopCh 只关闭一次。
 	once   sync.Once
 }
 
 const defaultNodeWeight = 100
 
+// NewDiscover 创建 K8s 发现器实例。
 func NewDiscover(client kubernetes.Interface, meta *micro.Meta, conf *ServiceConf) (*DiscoverInstance, error) {
 	if client == nil {
 		return nil, fmt.Errorf(micro.ErrClientIsNilFormat, "k8s")
@@ -66,6 +77,7 @@ func NewDiscover(client kubernetes.Interface, meta *micro.Meta, conf *ServiceCon
 	return ist, nil
 }
 
+// GetService 根据 method 获取服务节点列表。
 func (s *DiscoverInstance) GetService(method string) ([]*micro.ServiceNode, string, error) {
 	s.mu.RLock()
 	appID, ok := s.method[method]
@@ -83,6 +95,7 @@ func (s *DiscoverInstance) GetService(method string) ([]*micro.ServiceNode, stri
 	return out, appID, nil
 }
 
+// Watcher 启动 informer 并在变更时刷新本地索引。
 func (s *DiscoverInstance) Watcher() {
 	go s.informer.Run(s.stopCh)
 	if !cache.WaitForCacheSync(s.stopCh, s.informer.HasSynced) {
@@ -92,12 +105,14 @@ func (s *DiscoverInstance) Watcher() {
 	<-s.stopCh
 }
 
+// Unwatch 停止发现监听流程。
 func (s *DiscoverInstance) Unwatch() {
 	s.once.Do(func() {
 		close(s.stopCh)
 	})
 }
 
+// refresh 基于 MethodRoutes 全量重建发现索引。
 func (s *DiscoverInstance) refresh() error {
 	nextService := make(micro.ServiceDiscover)
 	nextMethod := make(micro.ServiceMethod)
@@ -119,6 +134,7 @@ func (s *DiscoverInstance) refresh() error {
 	return nil
 }
 
+// resolveNodes 按配置模式解析目标服务节点。
 func (s *DiscoverInstance) resolveNodes(appID string) ([]*micro.ServiceNode, error) {
 	switch s.conf.ResolveMode {
 	case ResolveModeEndpoints:
@@ -128,6 +144,7 @@ func (s *DiscoverInstance) resolveNodes(appID string) ([]*micro.ServiceNode, err
 	}
 }
 
+// resolveFromServiceFQDN 以 service FQDN 形式返回目标节点。
 func (s *DiscoverInstance) resolveFromServiceFQDN(appID string) ([]*micro.ServiceNode, error) {
 	raw, ok, err := s.informer.GetStore().GetByKey(s.conf.Namespace + "/" + appID)
 	if err != nil || !ok {
@@ -147,6 +164,7 @@ func (s *DiscoverInstance) resolveFromServiceFQDN(appID string) ([]*micro.Servic
 	return []*micro.ServiceNode{node}, nil
 }
 
+// resolveFromEndpoints 从 Endpoints 资源解析实例节点列表。
 func (s *DiscoverInstance) resolveFromEndpoints(appID string) ([]*micro.ServiceNode, error) {
 	raw, ok, err := s.informer.GetStore().GetByKey(s.conf.Namespace + "/" + appID)
 	if err != nil || !ok {
@@ -172,6 +190,7 @@ func (s *DiscoverInstance) resolveFromEndpoints(appID string) ([]*micro.ServiceN
 	return nodes, nil
 }
 
+// buildNodeFromService 基于 Service 构造一个逻辑节点。
 func buildNodeFromService(meta *micro.Meta, conf *ServiceConf, internal, appID string, svc *corev1.Service) *micro.ServiceNode {
 	nodeMeta := &micro.Meta{
 		Env:     meta.Env,
@@ -200,6 +219,7 @@ func buildNodeFromService(meta *micro.Meta, conf *ServiceConf, internal, appID s
 	return node
 }
 
+// buildNodeFromEndpoint 基于 Endpoints 地址构造一个逻辑节点。
 func buildNodeFromEndpoint(meta *micro.Meta, conf *ServiceConf, internal, appID string) *micro.ServiceNode {
 	return &micro.ServiceNode{
 		Weight: defaultNodeWeight,
@@ -218,6 +238,7 @@ func buildNodeFromEndpoint(meta *micro.Meta, conf *ServiceConf, internal, appID 
 	}
 }
 
+// buildInformer 根据解析模式创建对应的资源 informer。
 func (s *DiscoverInstance) buildInformer() cache.SharedIndexInformer {
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		s.client,
