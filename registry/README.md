@@ -70,3 +70,24 @@ func useDiscovery(client kubernetes.Interface) {
 	_, _ = appID, nodes
 }
 ```
+
+## Istio 场景建议
+
+在启用 Istio 后，建议按下面边界划分职责：
+
+- `go-k8s/registry` 负责：
+  - method -> service 的目标解析
+  - 基于 K8s Service/Endpoints 的基础可达信息维护
+- Istio 负责：
+  - 灰度发布（权重、版本、Header 路由）
+  - 故障转移、重试、超时、熔断等流量治理
+  - mTLS 与服务间安全策略
+- 网关负责：
+  - 鉴权、审计、入口限流
+  - 调用 `GetService` 获取目标服务，再转发到集群服务域名
+
+推荐实践：
+
+- `ResolveMode` 优先使用 `service_fqdn`，让负载策略尽量下沉给 Service + Istio
+- `MethodRoutes` 只维护业务路由归属，不维护实例级策略
+- 版本分流尽量通过 Istio `VirtualService/DestinationRule` 管理，不在网关重复实现

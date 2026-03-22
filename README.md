@@ -51,3 +51,9 @@ func main() {
 详细说明见：
 
 - [registry/README.md](file:///Users/lhdht/product/firefly/go-k8s/registry/README.md)
+
+## Istio 场景索引
+
+关于 K8s 与 Istio 的职责分界和推荐实践，见：
+
+- [registry/README.md - Istio 场景建议](file:///Users/lhdht/product/firefly/go-k8s/registry/README.md#L73-L93)
