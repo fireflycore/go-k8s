@@ -11,6 +11,7 @@
 - `(*DiscoverInstance).Watcher`：启动 informer 监听并构建路由索引
 - `(*DiscoverInstance).GetService`：按 method 获取目标节点
 - `(*DiscoverInstance).Unwatch`：停止监听
+- `(*DiscoverInstance).WatchEvent`：订阅服务变更回调
 
 ## 配置模型
 
@@ -61,6 +62,9 @@ func useDiscovery(client kubernetes.Interface) {
 
 	go dis.Watcher()
 	defer dis.Unwatch()
+	dis.WatchEvent(func(event *micro.ServiceEvent) {
+		_ = event
+	})
 
 	nodes, appID, err := dis.GetService("/acme.user.v1.UserService/Login")
 	if err != nil {

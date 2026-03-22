@@ -36,6 +36,9 @@ type DiscoverInstance struct {
 	stopCh chan struct{}
 	// once 确保 stopCh 只关闭一次。
 	once   sync.Once
+
+	// watchEventCallback 用于向外透传服务变更事件。
+	watchEventCallback micro.WatchEventFunc
 }
 
 const defaultNodeWeight = 100
@@ -112,6 +115,11 @@ func (s *DiscoverInstance) Unwatch() {
 	})
 }
 
+// WatchEvent 注册服务变更回调。
+func (s *DiscoverInstance) WatchEvent(callback micro.WatchEventFunc) {
+	s.watchEventCallback = callback
+}
+
 // refresh 基于 MethodRoutes 全量重建发现索引。
 func (s *DiscoverInstance) refresh() error {
 	nextService := make(micro.ServiceDiscover)
@@ -127,9 +135,13 @@ func (s *DiscoverInstance) refresh() error {
 	}
 
 	s.mu.Lock()
+	before := s.service
+	events := buildDiscoveryEvents(before, nextService)
 	s.service = nextService
 	s.method = nextMethod
 	s.mu.Unlock()
+
+	s.dispatchEvents(events)
 
 	return nil
 }
@@ -249,4 +261,64 @@ func (s *DiscoverInstance) buildInformer() cache.SharedIndexInformer {
 		return factory.Core().V1().Endpoints().Informer()
 	}
 	return factory.Core().V1().Services().Informer()
+}
+
+func (s *DiscoverInstance) dispatchEvents(events []micro.ServiceEvent) {
+	if s.watchEventCallback == nil || len(events) == 0 {
+		return
+	}
+	for _, event := range events {
+		item := event
+		go s.watchEventCallback(&item)
+	}
+}
+
+func buildDiscoveryEvents(before, after micro.ServiceDiscover) []micro.ServiceEvent {
+	events := make([]micro.ServiceEvent, 0, len(before)+len(after))
+	for appID, nodes := range after {
+		prev, ok := before[appID]
+		if !ok {
+			for _, node := range nodes {
+				events = append(events, micro.ServiceEvent{Type: micro.EventAdd, Service: node})
+			}
+			continue
+		}
+		if !sameDiscoveryNodes(prev, nodes) {
+			for _, node := range nodes {
+				events = append(events, micro.ServiceEvent{Type: micro.EventUpdate, Service: node})
+			}
+		}
+	}
+
+	for appID, nodes := range before {
+		if _, ok := after[appID]; ok {
+			continue
+		}
+		for _, node := range nodes {
+			events = append(events, micro.ServiceEvent{Type: micro.EventDelete, Service: node})
+		}
+	}
+	return events
+}
+
+func sameDiscoveryNodes(left, right []*micro.ServiceNode) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	lm := make(map[string]struct{}, len(left))
+	for _, item := range left {
+		if item == nil || item.Meta == nil || item.Network == nil {
+			continue
+		}
+		lm[item.Meta.AppId+"|"+item.Meta.InstanceId+"|"+item.Network.Internal] = struct{}{}
+	}
+	for _, item := range right {
+		if item == nil || item.Meta == nil || item.Network == nil {
+			continue
+		}
+		if _, ok := lm[item.Meta.AppId+"|"+item.Meta.InstanceId+"|"+item.Network.Internal]; !ok {
+			return false
+		}
+	}
+	return true
 }
