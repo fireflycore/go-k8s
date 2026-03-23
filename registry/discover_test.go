@@ -63,3 +63,18 @@ func TestDiscoverResolveServiceFQDN(t *testing.T) {
 		t.Fatalf("unexpected nodes len: %d", len(nodes))
 	}
 }
+
+func TestBuildNodeFromEndpointUsesInjectedInstanceID(t *testing.T) {
+	meta := &micro.Meta{Env: "prod", AppId: "user-service", Version: "v1", InstanceId: "ins-1"}
+	conf := &ServiceConf{Network: &micro.Network{}, Kernel: &micro.Kernel{}}
+	conf.Bootstrap()
+
+	node := buildNodeFromEndpoint(meta, conf, "10.0.0.1:9001", "user-service")
+
+	if node.Meta == nil {
+		t.Fatal("meta should not be nil")
+	}
+	if node.Meta.InstanceId != "ins-1" {
+		t.Fatal("instance id should come from injected meta")
+	}
+}
