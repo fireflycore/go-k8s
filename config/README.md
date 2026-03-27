@@ -8,6 +8,7 @@
 - 版本能力：`PutVersion/GetVersion/ListVersions`
 - 元信息能力：`GetMeta/PutMeta`
 - `Watcher`：`Watch/Unwatch`（基于 ConfigMap Watch）
+- `loader` 辅助：`NewStoreFromLoader`、`LoadConfigFromStore`
 
 ## 存储模型
 
@@ -18,6 +19,13 @@
 - meta：保存版本游标元信息（`data.meta`）
 
 ConfigMap 名称采用稳定哈希生成，避免超过 K8s 资源名限制。
+
+## Loader 辅助
+
+当调用方已经接入 `go-micro/config` 的 `LoaderParams` / `StoreParams` 体系时，可以直接使用：
+
+- `NewStoreFromLoader`：先按 local / remote 规则加载 `k8s.Conf`，再创建 `Store`
+- `LoadConfigFromStore`：从 `Store` 读取配置并解码为目标类型
 
 ## 快速开始
 
