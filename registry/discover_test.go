@@ -26,7 +26,7 @@ func TestDiscoverResolveServiceFQDN(t *testing.T) {
 		},
 	)
 
-	dis, err := NewDiscover(cli, &micro.Meta{
+	dis, err := NewDiscover(cli, &micro.ServiceMeta{
 		Env: "prod",
 	}, &ServiceConf{
 		Namespace:   "default",
@@ -35,7 +35,7 @@ func TestDiscoverResolveServiceFQDN(t *testing.T) {
 			"/acme.user.v1.UserService/Login": "user-service",
 		},
 		Network: &micro.Network{},
-		Kernel:  &micro.Kernel{},
+		Kernel:  &micro.ServiceKernel{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -65,8 +65,8 @@ func TestDiscoverResolveServiceFQDN(t *testing.T) {
 }
 
 func TestBuildNodeFromEndpointUsesInjectedInstanceID(t *testing.T) {
-	meta := &micro.Meta{Env: "prod", AppId: "user-service", Version: "v1", InstanceId: "ins-1"}
-	conf := &ServiceConf{Network: &micro.Network{}, Kernel: &micro.Kernel{}}
+	meta := &micro.ServiceMeta{Env: "prod", AppId: "user-service", Version: "v1", InstanceId: "ins-1"}
+	conf := &ServiceConf{Network: &micro.Network{}, Kernel: &micro.ServiceKernel{}}
 	conf.Bootstrap()
 
 	node := buildNodeFromEndpoint(meta, conf, "10.0.0.1:9001", "user-service")

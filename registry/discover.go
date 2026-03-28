@@ -20,7 +20,7 @@ type DiscoverInstance struct {
 	// client 是 Kubernetes 客户端。
 	client kubernetes.Interface
 	// meta 是环境元数据模板。
-	meta *micro.Meta
+	meta *micro.ServiceMeta
 	// conf 是发现配置。
 	conf *ServiceConf
 
@@ -44,7 +44,7 @@ type DiscoverInstance struct {
 const defaultNodeWeight = 100
 
 // NewDiscover 创建 K8s 发现器实例并返回统一发现接口。
-func NewDiscover(client kubernetes.Interface, meta *micro.Meta, conf *ServiceConf) (micro.Discovery, error) {
+func NewDiscover(client kubernetes.Interface, meta *micro.ServiceMeta, conf *ServiceConf) (micro.Discovery, error) {
 	if client == nil {
 		return nil, fmt.Errorf(micro.ErrClientIsNilFormat, "k8s")
 	}
@@ -203,8 +203,8 @@ func (s *DiscoverInstance) resolveFromEndpoints(appID string) ([]*micro.ServiceN
 }
 
 // buildNodeFromService 基于 Service 构造一个逻辑节点。
-func buildNodeFromService(meta *micro.Meta, conf *ServiceConf, internal, appID string, svc *corev1.Service) *micro.ServiceNode {
-	nodeMeta := &micro.Meta{
+func buildNodeFromService(meta *micro.ServiceMeta, conf *ServiceConf, internal, appID string, svc *corev1.Service) *micro.ServiceNode {
+	nodeMeta := &micro.ServiceMeta{
 		Env:        meta.Env,
 		AppId:      appID,
 		InstanceId: meta.InstanceId,
@@ -233,10 +233,10 @@ func buildNodeFromService(meta *micro.Meta, conf *ServiceConf, internal, appID s
 }
 
 // buildNodeFromEndpoint 基于 Endpoints 地址构造一个逻辑节点。
-func buildNodeFromEndpoint(meta *micro.Meta, conf *ServiceConf, internal, appID string) *micro.ServiceNode {
+func buildNodeFromEndpoint(meta *micro.ServiceMeta, conf *ServiceConf, internal, appID string) *micro.ServiceNode {
 	return &micro.ServiceNode{
 		Weight: defaultNodeWeight,
-		Meta: &micro.Meta{
+		Meta: &micro.ServiceMeta{
 			Env:        meta.Env,
 			AppId:      appID,
 			InstanceId: meta.InstanceId,

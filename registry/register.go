@@ -12,13 +12,13 @@ type RegisterInstance struct {
 	// client 是 Kubernetes 客户端。
 	client kubernetes.Interface
 	// meta 是服务元数据模板。
-	meta   *micro.Meta
+	meta *micro.ServiceMeta
 	// conf 是注册配置。
-	conf   *ServiceConf
+	conf *ServiceConf
 }
 
 // NewRegister 创建 K8s 注册器实例并返回统一注册接口。
-func NewRegister(client kubernetes.Interface, meta *micro.Meta, conf *ServiceConf) (micro.Register, error) {
+func NewRegister(client kubernetes.Interface, meta *micro.ServiceMeta, conf *ServiceConf) (micro.Register, error) {
 	if client == nil {
 		return nil, fmt.Errorf(micro.ErrClientIsNilFormat, "k8s")
 	}

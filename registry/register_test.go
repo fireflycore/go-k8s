@@ -9,13 +9,13 @@ import (
 
 func TestRegisterInstallNoop(t *testing.T) {
 	cli := fake.NewSimpleClientset()
-	reg, err := NewRegister(cli, &micro.Meta{
+	reg, err := NewRegister(cli, &micro.ServiceMeta{
 		Env:     "prod",
 		AppId:   "user-service",
 		Version: "v1.0.0",
 	}, &ServiceConf{
 		Network: &micro.Network{Internal: "127.0.0.1:9001"},
-		Kernel:  &micro.Kernel{},
+		Kernel:  &micro.ServiceKernel{},
 	})
 	if err != nil {
 		t.Fatal(err)
