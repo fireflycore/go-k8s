@@ -4,6 +4,7 @@
 
 - Kubernetes 客户端初始化能力
 - 基于 K8s 原生资源的注册中心适配能力（`registry` 子包）
+- 基于 Service DNS 的标准服务调用实现（`invocation` 子包）
 
 ## 设计定位
 
@@ -17,6 +18,7 @@
 - `conf.go`：Kubernetes 客户端配置
 - `core.go`：创建 `kubernetes.Interface`
 - `registry/`：`Register` 与 `Discovery` 的 K8s 实现
+- `invocation/`：面向 `service -> service` 的标准调用实现
 
 ## 快速开始
 
@@ -51,9 +53,11 @@ func main() {
 详细说明见：
 
 - [registry/README.md](file:///Users/lhdht/product/firefly/go-k8s/registry/README.md)
+- [invocation/README.md](./invocation/README.md)
 
 ## Istio 场景索引
 
 关于 K8s 与 Istio 的职责分界和推荐实践，见：
 
 - [registry/README.md - Istio 场景建议](file:///Users/lhdht/product/firefly/go-k8s/registry/README.md#L73-L93)
+- `invocation` 作为新的标准调用模型，会逐步成为主路径
