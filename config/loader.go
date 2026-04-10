@@ -24,6 +24,7 @@ func NewStoreFromLoader(params config.LoaderParams, localLoad config.LocalLoader
 }
 
 // LoadConfigFromStore 从 Store 读取当前配置并解码为目标类型 T。
+// 当 Item.Encrypted=true 时，会复用 go-micro/config 的统一规则，先解密整份内容，再解析目标结构。
 func LoadConfigFromStore[T any](ctx context.Context, store config.Store, params config.StoreParams, payloadDecode config.PayloadDecodeFunc) (T, error) {
 	return config.LoadStoreConfig[T](ctx, store, params, payloadDecode)
 }
