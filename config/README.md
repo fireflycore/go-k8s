@@ -32,8 +32,8 @@ ConfigMap 名称采用稳定哈希生成，避免超过 K8s 资源名限制。
 ## 加密语义
 
 - `go-k8s/config` 遵循 `go-micro/config` 的统一加密语义。
-- `microcfg.Item.Encrypted=false` 时，读取方直接解析配置内容。
-- `microcfg.Item.Encrypted=true` 时，读取方必须先解密整份配置内容，再解析目标结构。
+- `microcfg.Raw.Encrypted=false` 时，读取方直接解析配置内容。
+- `microcfg.Raw.Encrypted=true` 时，读取方必须先解密整份配置内容，再解析目标结构。
 - 不做字段级加密；如果只有部分内容需要保护，应拆成独立配置项。
 
 ## 快速开始
@@ -72,7 +72,7 @@ func main() {
 		Name:     "primary",
 	}
 
-	_ = store.Put(context.Background(), key, &microcfg.Item{
+	_ = store.Put(context.Background(), key, &microcfg.Raw{
 		Version: "v1",
 		Content: []byte(`{"dsn":"root:root@tcp(mysql:3306)/order"}`),
 	})

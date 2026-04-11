@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	microconfig "github.com/fireflycore/go-micro/config"
+	microConfig "github.com/fireflycore/go-micro/config"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -12,7 +12,7 @@ import (
 )
 
 // Watch 监听指定配置键的变更事件。
-func (s *StoreInstance) Watch(ctx context.Context, key microconfig.Key) (<-chan microconfig.WatchEvent, error) {
+func (s *StoreInstance) Watch(ctx context.Context, key microConfig.Key) (<-chan microConfig.WatchEvent, error) {
 	// key 不合法时直接返回统一错误。
 	if err := validateKey(key); err != nil {
 		return nil, err
@@ -38,7 +38,7 @@ func (s *StoreInstance) Watch(ctx context.Context, key microconfig.Key) (<-chan 
 	if s.options != nil && s.options.WatchBuffer > 0 {
 		bufferSize = s.options.WatchBuffer
 	}
-	out := make(chan microconfig.WatchEvent, bufferSize)
+	out := make(chan microConfig.WatchEvent, bufferSize)
 
 	// 启动异步 watch 循环。
 	go func() {
@@ -88,7 +88,7 @@ func (s *StoreInstance) Watch(ctx context.Context, key microconfig.Key) (<-chan 
 }
 
 // Unwatch 取消指定配置键的监听。
-func (s *StoreInstance) Unwatch(key microconfig.Key) {
+func (s *StoreInstance) Unwatch(key microConfig.Key) {
 	// key 不合法时直接忽略，保持幂等。
 	if err := validateKey(key); err != nil {
 		return
@@ -107,9 +107,9 @@ func (s *StoreInstance) Unwatch(key microconfig.Key) {
 // consumeWatchStream 消费单次 watch stream，返回 true 表示应退出主循环。
 func (s *StoreInstance) consumeWatchStream(
 	ctx context.Context,
-	key microconfig.Key,
+	key microConfig.Key,
 	watcher watch.Interface,
-	out chan<- microconfig.WatchEvent,
+	out chan<- microConfig.WatchEvent,
 ) bool {
 	// 确保当前 stream 结束时关闭 watcher。
 	defer watcher.Stop()
@@ -141,11 +141,11 @@ func (s *StoreInstance) consumeWatchStream(
 }
 
 // toWatchEvent 把 K8s Watch 事件转换为统一 watch 事件。
-func (s *StoreInstance) toWatchEvent(key microconfig.Key, event watch.Event) (microconfig.WatchEvent, bool) {
+func (s *StoreInstance) toWatchEvent(key microConfig.Key, event watch.Event) (microConfig.WatchEvent, bool) {
 	// 删除事件直接返回 EventDelete。
 	if event.Type == watch.Deleted {
-		return microconfig.WatchEvent{
-			Type: microconfig.EventDelete,
+		return microConfig.WatchEvent{
+			Type: microConfig.EventDelete,
 			Key:  key,
 		}, true
 	}
@@ -153,21 +153,21 @@ func (s *StoreInstance) toWatchEvent(key microconfig.Key, event watch.Event) (mi
 	// 其余事件尝试解析 ConfigMap 内容。
 	cm, ok := event.Object.(*corev1.ConfigMap)
 	if !ok || cm == nil || cm.Data == nil {
-		return microconfig.WatchEvent{}, false
+		return microConfig.WatchEvent{}, false
 	}
-	raw, ok := cm.Data[dataKeyItem]
+	raw, ok := cm.Data[dataKeyRaw]
 	if !ok || raw == "" {
-		return microconfig.WatchEvent{}, false
+		return microConfig.WatchEvent{}, false
 	}
-	item, err := s.decodeItem([]byte(raw))
+	rawValue, err := s.decodeRaw([]byte(raw))
 	if err != nil {
-		return microconfig.WatchEvent{}, false
+		return microConfig.WatchEvent{}, false
 	}
 
 	// 返回统一 put 事件。
-	return microconfig.WatchEvent{
-		Type: microconfig.EventPut,
+	return microConfig.WatchEvent{
+		Type: microConfig.EventPut,
 		Key:  key,
-		Item: item,
+		Raw:  rawValue,
 	}, true
 }

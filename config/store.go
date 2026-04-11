@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	microconfig "github.com/fireflycore/go-micro/config"
+	microConfig "github.com/fireflycore/go-micro/config"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,7 +19,7 @@ import (
 
 const (
 	defaultNamespace = "default"
-	dataKeyItem      = "item"
+	dataKeyRaw       = "raw"
 	dataKeyMeta      = "meta"
 )
 
@@ -28,7 +28,7 @@ type StoreInstance struct {
 	// client 是外部注入的 Kubernetes 客户端。
 	client kubernetes.Interface
 	// options 保存通用配置参数。
-	options *microconfig.Options
+	options *microConfig.Options
 	// namespace 表示资源操作命名空间。
 	namespace string
 
@@ -39,24 +39,24 @@ type StoreInstance struct {
 }
 
 // NewStore 基于 Kubernetes 客户端创建配置存储实例。
-func NewStore(client kubernetes.Interface, conf *Conf, opts ...microconfig.Option) (*StoreInstance, error) {
+func NewStore(client kubernetes.Interface, config *Config, opts ...microConfig.Option) (*StoreInstance, error) {
 	// Kubernetes 客户端为空时直接报错。
 	if client == nil {
 		return nil, errors.New("k8s config: client is nil")
 	}
 
 	// 先构建通用 options，再保存到实例。
-	var raw *microconfig.Options
-	if conf != nil {
-		raw = conf.BuildOptions(opts...)
+	var raw *microConfig.Options
+	if config != nil {
+		raw = config.BuildOptions(opts...)
 	} else {
-		raw = microconfig.NewOptions(opts...)
+		raw = microConfig.NewOptions(opts...)
 	}
 
 	// 计算命名空间，优先使用 conf.Namespace。
 	ns := defaultNamespace
-	if conf != nil && strings.TrimSpace(conf.Namespace) != "" {
-		ns = strings.TrimSpace(conf.Namespace)
+	if config != nil && strings.TrimSpace(config.Namespace) != "" {
+		ns = strings.TrimSpace(config.Namespace)
 	}
 
 	// 返回初始化完成的实例。
@@ -69,7 +69,7 @@ func NewStore(client kubernetes.Interface, conf *Conf, opts ...microconfig.Optio
 }
 
 // Get 按配置键读取当前生效配置。
-func (s *StoreInstance) Get(ctx context.Context, key microconfig.Key) (*microconfig.Item, error) {
+func (s *StoreInstance) Get(ctx context.Context, key microConfig.Key) (*microConfig.Raw, error) {
 	// key 不合法时直接返回统一错误。
 	if err := validateKey(key); err != nil {
 		return nil, err
@@ -83,50 +83,39 @@ func (s *StoreInstance) Get(ctx context.Context, key microconfig.Key) (*microcon
 	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(reqCtx, s.currentName(key), metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, microconfig.ErrResourceNotFound
+			return nil, microConfig.ErrResourceNotFound
 		}
 		return nil, err
 	}
 
 	// 从固定数据键提取内容。
-	raw, ok := cm.Data[dataKeyItem]
+	raw, ok := cm.Data[dataKeyRaw]
 	if !ok || raw == "" {
-		return nil, microconfig.ErrResourceNotFound
+		return nil, microConfig.ErrResourceNotFound
 	}
 
 	// 解析配置内容并返回。
-	return s.decodeItem([]byte(raw))
+	return s.decodeRaw([]byte(raw))
 }
 
 // GetByQuery 按运行时上下文读取配置。
-func (s *StoreInstance) GetByQuery(ctx context.Context, query microconfig.Query) (*microconfig.Item, error) {
-	// 复制基础 key，避免修改入参。
-	key := query.Key
-	// 若 key 未携带租户，则回退到 query.TenantId。
-	if key.TenantId == "" {
-		key.TenantId = query.TenantId
-	}
-	// 若 key 未携带 appId，则回退到 query.AppId。
-	if key.AppId == "" {
-		key.AppId = query.AppId
-	}
-	// 复用 Get 逻辑，保持行为一致。
-	return s.Get(ctx, key)
+func (s *StoreInstance) GetByQuery(ctx context.Context, query microConfig.Query) (*microConfig.Raw, error) {
+	return s.Get(ctx, query.Key)
 }
 
 // Put 写入当前生效配置。
-func (s *StoreInstance) Put(ctx context.Context, key microconfig.Key, item *microconfig.Item) error {
+func (s *StoreInstance) Put(ctx context.Context, key microConfig.Key, raw *microConfig.Raw) error {
 	// key 不合法时直接返回统一错误。
 	if err := validateKey(key); err != nil {
 		return err
 	}
-	// item 为空时直接返回统一错误。
-	if item == nil {
-		return microconfig.ErrInvalidItem
+	// raw 为空时直接返回统一错误。
+	if raw == nil {
+		return microConfig.ErrInvalidRaw
 	}
 
 	// 编码配置内容。
-	val, err := s.encodeItem(item)
+	val, err := s.encodeRaw(raw)
 	if err != nil {
 		return err
 	}
@@ -137,14 +126,14 @@ func (s *StoreInstance) Put(ctx context.Context, key microconfig.Key, item *micr
 
 	// 确保 current ConfigMap 存在并更新数据。
 	return s.upsertConfigMapData(reqCtx, s.currentName(key), map[string]string{
-		dataKeyItem: string(val),
+		dataKeyRaw: string(val),
 	}, map[string]string{
 		"type": "current",
 	})
 }
 
 // Delete 删除当前配置。
-func (s *StoreInstance) Delete(ctx context.Context, key microconfig.Key) error {
+func (s *StoreInstance) Delete(ctx context.Context, key microConfig.Key) error {
 	// key 不合法时直接返回统一错误。
 	if err := validateKey(key); err != nil {
 		return err
@@ -163,28 +152,28 @@ func (s *StoreInstance) Delete(ctx context.Context, key microconfig.Key) error {
 }
 
 // PutVersion 写入版本快照并返回版本号。
-func (s *StoreInstance) PutVersion(ctx context.Context, key microconfig.Key, item *microconfig.Item) (string, error) {
+func (s *StoreInstance) PutVersion(ctx context.Context, key microConfig.Key, raw *microConfig.Raw) (string, error) {
 	// key 不合法时直接返回统一错误。
 	if err := validateKey(key); err != nil {
 		return "", err
 	}
-	// item 为空时直接返回统一错误。
-	if item == nil {
-		return "", microconfig.ErrInvalidItem
+	// raw 为空时直接返回统一错误。
+	if raw == nil {
+		return "", microConfig.ErrInvalidRaw
 	}
 
 	// 若调用方未显式提供版本号，则按 key hash 版本号策略外部生成。
-	version := item.Version
+	version := raw.Version
 	if version == "" {
-		return "", microconfig.ErrInvalidItem
+		return "", microConfig.ErrInvalidRaw
 	}
 
 	// 构造写入版本快照的数据副本。
-	versioned := *item
+	versioned := *raw
 	versioned.Version = version
 
 	// 编码版本内容。
-	val, err := s.encodeItem(&versioned)
+	val, err := s.encodeRaw(&versioned)
 	if err != nil {
 		return "", err
 	}
@@ -205,7 +194,7 @@ func (s *StoreInstance) PutVersion(ctx context.Context, key microconfig.Key, ite
 
 	// 版本冲突检查：同版本已存在且内容不同。
 	if prev, ok := cm.Data[version]; ok && prev != string(val) {
-		return "", microconfig.ErrVersionConflict
+		return "", microConfig.ErrVersionConflict
 	}
 	cm.Data[version] = string(val)
 
@@ -219,14 +208,14 @@ func (s *StoreInstance) PutVersion(ctx context.Context, key microconfig.Key, ite
 }
 
 // GetVersion 读取指定版本快照。
-func (s *StoreInstance) GetVersion(ctx context.Context, key microconfig.Key, version string) (*microconfig.Item, error) {
+func (s *StoreInstance) GetVersion(ctx context.Context, key microConfig.Key, version string) (*microConfig.Raw, error) {
 	// key 不合法时直接返回统一错误。
 	if err := validateKey(key); err != nil {
 		return nil, err
 	}
 	// 版本号为空时返回统一错误。
 	if strings.TrimSpace(version) == "" {
-		return nil, microconfig.ErrInvalidItem
+		return nil, microConfig.ErrInvalidRaw
 	}
 
 	// 使用超时上下文执行读取。
@@ -237,26 +226,26 @@ func (s *StoreInstance) GetVersion(ctx context.Context, key microconfig.Key, ver
 	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(reqCtx, s.versionsName(key), metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, microconfig.ErrResourceNotFound
+			return nil, microConfig.ErrResourceNotFound
 		}
 		return nil, err
 	}
 	if cm.Data == nil {
-		return nil, microconfig.ErrResourceNotFound
+		return nil, microConfig.ErrResourceNotFound
 	}
 
 	// 读取指定版本内容。
 	raw, ok := cm.Data[version]
 	if !ok || raw == "" {
-		return nil, microconfig.ErrResourceNotFound
+		return nil, microConfig.ErrResourceNotFound
 	}
 
 	// 解析并返回配置内容。
-	return s.decodeItem([]byte(raw))
+	return s.decodeRaw([]byte(raw))
 }
 
 // ListVersions 列出版本号列表。
-func (s *StoreInstance) ListVersions(ctx context.Context, key microconfig.Key, limit int) ([]string, error) {
+func (s *StoreInstance) ListVersions(ctx context.Context, key microConfig.Key, limit int) ([]string, error) {
 	// key 不合法时直接返回统一错误。
 	if err := validateKey(key); err != nil {
 		return nil, err
@@ -295,7 +284,7 @@ func (s *StoreInstance) ListVersions(ctx context.Context, key microconfig.Key, l
 }
 
 // GetMeta 读取配置元信息。
-func (s *StoreInstance) GetMeta(ctx context.Context, key microconfig.Key) (*microconfig.Meta, error) {
+func (s *StoreInstance) GetMeta(ctx context.Context, key microConfig.Key) (*microConfig.Meta, error) {
 	// key 不合法时直接返回统一错误。
 	if err := validateKey(key); err != nil {
 		return nil, err
@@ -309,7 +298,7 @@ func (s *StoreInstance) GetMeta(ctx context.Context, key microconfig.Key) (*micr
 	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(reqCtx, s.metaName(key), metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, microconfig.ErrResourceNotFound
+			return nil, microConfig.ErrResourceNotFound
 		}
 		return nil, err
 	}
@@ -317,7 +306,7 @@ func (s *StoreInstance) GetMeta(ctx context.Context, key microconfig.Key) (*micr
 	// 从固定数据键提取内容。
 	raw, ok := cm.Data[dataKeyMeta]
 	if !ok || raw == "" {
-		return nil, microconfig.ErrResourceNotFound
+		return nil, microConfig.ErrResourceNotFound
 	}
 
 	// 解析并返回元信息。
@@ -325,14 +314,14 @@ func (s *StoreInstance) GetMeta(ctx context.Context, key microconfig.Key) (*micr
 }
 
 // PutMeta 写入配置元信息。
-func (s *StoreInstance) PutMeta(ctx context.Context, key microconfig.Key, meta *microconfig.Meta) error {
+func (s *StoreInstance) PutMeta(ctx context.Context, key microConfig.Key, meta *microConfig.Meta) error {
 	// key 不合法时直接返回统一错误。
 	if err := validateKey(key); err != nil {
 		return err
 	}
 	// meta 为空时返回统一错误。
 	if meta == nil {
-		return microconfig.ErrInvalidItem
+		return microConfig.ErrInvalidRaw
 	}
 
 	// 编码元信息。
@@ -368,22 +357,22 @@ func (s *StoreInstance) withTimeout(ctx context.Context) (context.Context, conte
 }
 
 // currentName 生成 current ConfigMap 名称。
-func (s *StoreInstance) currentName(key microconfig.Key) string {
+func (s *StoreInstance) currentName(key microConfig.Key) string {
 	return fmt.Sprintf("cfg-current-%s", shortHash(buildKeySignature(key)))
 }
 
 // versionsName 生成 versions ConfigMap 名称。
-func (s *StoreInstance) versionsName(key microconfig.Key) string {
+func (s *StoreInstance) versionsName(key microConfig.Key) string {
 	return fmt.Sprintf("cfg-versions-%s", shortHash(buildKeySignature(key)))
 }
 
 // metaName 生成 meta ConfigMap 名称。
-func (s *StoreInstance) metaName(key microconfig.Key) string {
+func (s *StoreInstance) metaName(key microConfig.Key) string {
 	return fmt.Sprintf("cfg-meta-%s", shortHash(buildKeySignature(key)))
 }
 
 // buildKeySignature 构造稳定的键签名字符串。
-func buildKeySignature(key microconfig.Key) string {
+func buildKeySignature(key microConfig.Key) string {
 	tenant := strings.TrimSpace(key.TenantId)
 	if tenant == "" {
 		tenant = "default"
@@ -451,20 +440,20 @@ func (s *StoreInstance) getOrCreateConfigMap(ctx context.Context, name string, l
 	return created, nil
 }
 
-// encodeItem 对配置内容做编码。
-func (s *StoreInstance) encodeItem(item *microconfig.Item) ([]byte, error) {
+// encodeRaw 对配置内容做编码。
+func (s *StoreInstance) encodeRaw(raw *microConfig.Raw) ([]byte, error) {
 	// 优先使用调用方注入的编解码器。
 	if s.options != nil && s.options.Codec != nil {
-		return s.options.Codec.Marshal(item)
+		return s.options.Codec.Marshal(raw)
 	}
 	// 默认使用 JSON 编码。
-	return json.Marshal(item)
+	return json.Marshal(raw)
 }
 
-// decodeItem 对配置内容做解码。
-func (s *StoreInstance) decodeItem(data []byte) (*microconfig.Item, error) {
+// decodeRaw 对配置内容做解码。
+func (s *StoreInstance) decodeRaw(data []byte) (*microConfig.Raw, error) {
 	// 准备承载结果对象。
-	raw := new(microconfig.Item)
+	raw := new(microConfig.Raw)
 	// 优先使用调用方注入的编解码器。
 	if s.options != nil && s.options.Codec != nil {
 		if err := s.options.Codec.Unmarshal(data, raw); err != nil {
@@ -480,7 +469,7 @@ func (s *StoreInstance) decodeItem(data []byte) (*microconfig.Item, error) {
 }
 
 // encodeMeta 对元信息做编码。
-func (s *StoreInstance) encodeMeta(meta *microconfig.Meta) ([]byte, error) {
+func (s *StoreInstance) encodeMeta(meta *microConfig.Meta) ([]byte, error) {
 	// 优先使用调用方注入的编解码器。
 	if s.options != nil && s.options.Codec != nil {
 		return s.options.Codec.Marshal(meta)
@@ -490,9 +479,9 @@ func (s *StoreInstance) encodeMeta(meta *microconfig.Meta) ([]byte, error) {
 }
 
 // decodeMeta 对元信息做解码。
-func (s *StoreInstance) decodeMeta(data []byte) (*microconfig.Meta, error) {
+func (s *StoreInstance) decodeMeta(data []byte) (*microConfig.Meta, error) {
 	// 准备承载结果对象。
-	raw := new(microconfig.Meta)
+	raw := new(microConfig.Meta)
 	// 优先使用调用方注入的编解码器。
 	if s.options != nil && s.options.Codec != nil {
 		if err := s.options.Codec.Unmarshal(data, raw); err != nil {
@@ -508,22 +497,22 @@ func (s *StoreInstance) decodeMeta(data []byte) (*microconfig.Meta, error) {
 }
 
 // validateKey 校验配置键合法性。
-func validateKey(key microconfig.Key) error {
+func validateKey(key microConfig.Key) error {
 	// Env 为空时视为无效 key。
 	if strings.TrimSpace(key.Env) == "" {
-		return microconfig.ErrInvalidKey
+		return microConfig.ErrInvalidKey
 	}
 	// AppId 为空时视为无效 key。
 	if strings.TrimSpace(key.AppId) == "" {
-		return microconfig.ErrInvalidKey
+		return microConfig.ErrInvalidKey
 	}
 	// Group 为空时视为无效 key。
 	if strings.TrimSpace(key.Group) == "" {
-		return microconfig.ErrInvalidKey
+		return microConfig.ErrInvalidKey
 	}
 	// Name 为空时视为无效 key。
 	if strings.TrimSpace(key.Name) == "" {
-		return microconfig.ErrInvalidKey
+		return microConfig.ErrInvalidKey
 	}
 	// key 校验通过。
 	return nil
