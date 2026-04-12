@@ -19,9 +19,9 @@
 
 ## 当前提供的能力
 
-### Conf
+### Config
 
-`Conf` 用于定义 K8s invocation 的基础配置，例如：
+`Config` 用于定义 K8s invocation 的基础配置，例如：
 
 - `Namespace`
 - `DefaultPort`
@@ -45,7 +45,7 @@
 dns:///auth.default.svc.cluster.local:9000
 ```
 
-这条路径与 etcd / consul 的轻量实现不同，它不需要在调用侧做节点级选择。
+这条路径与 `go-consul` 的裸机实现不同，它不需要在调用侧做节点级选择。
 
 原因是：
 
@@ -72,7 +72,7 @@ dns:///auth.default.svc.cluster.local:9000
 
 当前已经完成：
 
-- `Conf`
+- `Config`
 - `Locator`
 - `NewConnectionManager`
 - 单元测试
