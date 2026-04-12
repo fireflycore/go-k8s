@@ -23,13 +23,13 @@ type serviceReader interface {
 // - 若开启 ValidateService，则在返回前额外向 K8s API 校验 Service 是否存在。
 type Locator struct {
 	serviceReader serviceReader
-	conf          Conf
+	conf          Config
 }
 
 // NewLocator 创建 K8s invocation 标准定位器。
-func NewLocator(client kubernetes.Interface, conf *Conf) (*Locator, error) {
+func NewLocator(client kubernetes.Interface, conf *Config) (*Locator, error) {
 	if conf == nil {
-		conf = &Conf{}
+		conf = &Config{}
 	}
 	conf.Bootstrap()
 
@@ -54,11 +54,9 @@ func (l *Locator) Resolve(ctx context.Context, ref microInvocation.ServiceRef) (
 		}
 	}
 
-	return microInvocation.BuildTarget(ref, microInvocation.TargetOptions{
-		DefaultPort:    l.conf.DefaultPort,
-		ClusterDomain:  l.conf.ClusterDomain,
-		ResolverScheme: l.conf.ResolverScheme,
-	})
+	return microInvocation.StaticLocator{
+		Options: l.conf.TargetOptions,
+	}.Resolve(ctx, ref)
 }
 
 func (l *Locator) normalizeRef(ref microInvocation.ServiceRef) microInvocation.ServiceRef {

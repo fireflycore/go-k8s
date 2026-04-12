@@ -6,8 +6,8 @@ import (
 )
 
 // NewConnectionManager 创建基于 K8s Locator 的连接管理器。
-func NewConnectionManager(client kubernetes.Interface, conf *Conf, options microInvocation.ConnectionManagerOptions) (*microInvocation.ConnectionManager, error) {
-	locator, err := NewLocator(client, conf)
+func NewConnectionManager(client kubernetes.Interface, config *Config, options microInvocation.ConnectionManagerOptions) (*microInvocation.ConnectionManager, error) {
+	locator, err := NewLocator(client, config)
 	if err != nil {
 		return nil, err
 	}

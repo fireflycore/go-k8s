@@ -8,15 +8,11 @@ const (
 )
 
 // Conf 定义 K8s invocation 标准实现的配置。
-type Conf struct {
+type Config struct {
 	// Namespace 是默认命名空间。
 	Namespace string `json:"namespace"`
-	// DefaultPort 是默认 gRPC 端口。
-	DefaultPort uint16 `json:"default_port"`
-	// ClusterDomain 是 Service DNS 所使用的集群域。
-	ClusterDomain string `json:"cluster_domain"`
-	// ResolverScheme 是最终 gRPC target 使用的 resolver scheme。
-	ResolverScheme string `json:"resolver_scheme"`
+	// TargetOptions 表示通用 target 构造选项。
+	TargetOptions microInvocation.TargetOptions `json:"target_options"`
 	// ValidateService 控制 Resolve 时是否主动向 K8s API 校验 Service 是否存在。
 	//
 	// 默认关闭，原因是：
@@ -26,14 +22,14 @@ type Conf struct {
 }
 
 // Bootstrap 补齐默认值。
-func (c *Conf) Bootstrap() {
+func (c *Config) Bootstrap() {
 	if c.Namespace == "" {
 		c.Namespace = DefaultNamespace
 	}
-	if c.ClusterDomain == "" {
-		c.ClusterDomain = microInvocation.DefaultClusterDomain
+	if c.TargetOptions.ClusterDomain == "" {
+		c.TargetOptions.ClusterDomain = microInvocation.DefaultClusterDomain
 	}
-	if c.ResolverScheme == "" {
-		c.ResolverScheme = microInvocation.DefaultResolverScheme
+	if c.TargetOptions.ResolverScheme == "" {
+		c.TargetOptions.ResolverScheme = microInvocation.DefaultResolverScheme
 	}
 }

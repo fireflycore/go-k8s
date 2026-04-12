@@ -11,9 +11,11 @@ import (
 )
 
 func TestLocatorResolveBuildsServiceDNSTarget(t *testing.T) {
-	locator, err := NewLocator(nil, &Conf{
-		Namespace:   "default",
-		DefaultPort: 9000,
+	locator, err := NewLocator(nil, &Config{
+		Namespace: "default",
+		TargetOptions: microInvocation.TargetOptions{
+			DefaultPort: 9000,
+		},
 	})
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
@@ -39,9 +41,11 @@ func TestLocatorResolveValidatesServiceWhenEnabled(t *testing.T) {
 		},
 	})
 
-	locator, err := NewLocator(client, &Conf{
-		Namespace:       "default",
-		DefaultPort:     9000,
+	locator, err := NewLocator(client, &Config{
+		Namespace: "default",
+		TargetOptions: microInvocation.TargetOptions{
+			DefaultPort: 9000,
+		},
 		ValidateService: true,
 	})
 	if err != nil {
