@@ -9,7 +9,7 @@ import (
 )
 
 // New 根据配置创建 Kubernetes 客户端接口。
-func New(c *Conf) (kubernetes.Interface, error) {
+func New(c *Config) (kubernetes.Interface, error) {
 	// 配置不能为空。
 	if c == nil {
 		return nil, errors.New("k8s: conf is nil")
