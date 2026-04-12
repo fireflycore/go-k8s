@@ -10,7 +10,7 @@ import (
 // NewStoreFromLoader 基于统一加载参数创建 K8s 配置存储实例。
 // 流程：先按 local / remote 解析出 k8s.Conf，再创建客户端，最后构建 Store。
 func NewStoreFromLoader(params microConfig.LoaderParams, localLoad microConfig.LocalLoaderFunc, remoteLoad microConfig.RemoteLoaderFunc, payloadDecode microConfig.PayloadDecodeFunc, conf *Config, opts ...microConfig.Option) (microConfig.Store, error) {
-	backendConf, err := microConfig.LoadConfig[k8s.Conf](params, localLoad, remoteLoad, payloadDecode)
+	backendConf, err := microConfig.LoadConfig[k8s.Config](params, localLoad, remoteLoad, payloadDecode)
 	if err != nil {
 		return nil, err
 	}
