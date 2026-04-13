@@ -98,11 +98,6 @@ func (s *StoreInstance) Get(ctx context.Context, key microConfig.Key) (*microCon
 	return s.decodeRaw([]byte(raw))
 }
 
-// GetByQuery 按运行时上下文读取配置。
-func (s *StoreInstance) GetByQuery(ctx context.Context, query microConfig.Query) (*microConfig.Raw, error) {
-	return s.Get(ctx, query.Key)
-}
-
 // Put 写入当前生效配置。
 func (s *StoreInstance) Put(ctx context.Context, key microConfig.Key, raw *microConfig.Raw) error {
 	// key 不合法时直接返回统一错误。
