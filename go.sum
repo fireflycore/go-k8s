@@ -7,8 +7,8 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/emicklei/go-restful/v3 v3.12.2 h1:DhwDP0vY3k8ZzE0RunuJy8GhNpPL6zqLkDf9B/a0/xU=
 github.com/emicklei/go-restful/v3 v3.12.2/go.mod h1:6n3XBCmQQb25CM2LCACGz8ukIrRry+4bhvbpWn3mrbc=
-github.com/fireflycore/go-micro v1.3.3 h1:z6DzBQN2690H4zm4IY34EriniPdn74EB18xovtrVdn8=
-github.com/fireflycore/go-micro v1.3.3/go.mod h1:88gqMu9iB9MuhEcorEB4E5G659qD/0bAgimenVgcTeU=
+github.com/fireflycore/go-micro v1.3.5 h1:JgM1mJFniIkAIwTG3pMh7rz/AvpD3odKnVNsM+vSGiM=
+github.com/fireflycore/go-micro v1.3.5/go.mod h1:AOV8on1A80boOtq6xS3N1ggnTJCofIdFZOQav6U+8jc=
 github.com/fxamacker/cbor/v2 v2.9.0 h1:NpKPmjDBgUfBms6tr6JZkTHtfFGcMKsw3eGcmD/sapM=
 github.com/fxamacker/cbor/v2 v2.9.0/go.mod h1:vM4b+DJCtHn+zz7h3FFp/hDAI9WNWCsZj23V5ytsSxQ=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
