@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
-	"sort"
 	"strings"
 	"sync"
 
@@ -20,7 +19,6 @@ import (
 const (
 	defaultNamespace = "default"
 	dataKeyRaw       = "raw"
-	dataKeyMeta      = "meta"
 )
 
 // StoreInstance 是基于 K8s ConfigMap 的统一配置存储实现。
@@ -146,197 +144,6 @@ func (s *StoreInstance) Delete(ctx context.Context, key microConfig.Key) error {
 	return err
 }
 
-// PutVersion 写入版本快照并返回版本号。
-func (s *StoreInstance) PutVersion(ctx context.Context, key microConfig.Key, raw *microConfig.Raw) (string, error) {
-	// key 不合法时直接返回统一错误。
-	if err := validateKey(key); err != nil {
-		return "", err
-	}
-	// raw 为空时直接返回统一错误。
-	if raw == nil {
-		return "", microConfig.ErrInvalidRaw
-	}
-
-	// 若调用方未显式提供版本号，则按 key hash 版本号策略外部生成。
-	version := raw.Version
-	if version == "" {
-		return "", microConfig.ErrInvalidRaw
-	}
-
-	// 构造写入版本快照的数据副本。
-	versioned := *raw
-	versioned.Version = version
-
-	// 编码版本内容。
-	val, err := s.encodeRaw(&versioned)
-	if err != nil {
-		return "", err
-	}
-
-	// 使用超时上下文执行写入。
-	reqCtx, cancel := s.withTimeout(ctx)
-	defer cancel()
-
-	// 先读取或创建 versions ConfigMap。
-	name := s.versionsName(key)
-	cm, err := s.getOrCreateConfigMap(reqCtx, name, map[string]string{"type": "versions"})
-	if err != nil {
-		return "", err
-	}
-	if cm.Data == nil {
-		cm.Data = map[string]string{}
-	}
-
-	// 版本冲突检查：同版本已存在且内容不同。
-	if prev, ok := cm.Data[version]; ok && prev != string(val) {
-		return "", microConfig.ErrVersionConflict
-	}
-	cm.Data[version] = string(val)
-
-	// 提交更新。
-	if _, err = s.client.CoreV1().ConfigMaps(s.namespace).Update(reqCtx, cm, metav1.UpdateOptions{}); err != nil {
-		return "", err
-	}
-
-	// 返回最终版本号。
-	return version, nil
-}
-
-// GetVersion 读取指定版本快照。
-func (s *StoreInstance) GetVersion(ctx context.Context, key microConfig.Key, version string) (*microConfig.Raw, error) {
-	// key 不合法时直接返回统一错误。
-	if err := validateKey(key); err != nil {
-		return nil, err
-	}
-	// 版本号为空时返回统一错误。
-	if strings.TrimSpace(version) == "" {
-		return nil, microConfig.ErrInvalidRaw
-	}
-
-	// 使用超时上下文执行读取。
-	reqCtx, cancel := s.withTimeout(ctx)
-	defer cancel()
-
-	// 读取 versions ConfigMap。
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(reqCtx, s.versionsName(key), metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, microConfig.ErrResourceNotFound
-		}
-		return nil, err
-	}
-	if cm.Data == nil {
-		return nil, microConfig.ErrResourceNotFound
-	}
-
-	// 读取指定版本内容。
-	raw, ok := cm.Data[version]
-	if !ok || raw == "" {
-		return nil, microConfig.ErrResourceNotFound
-	}
-
-	// 解析并返回配置内容。
-	return s.decodeRaw([]byte(raw))
-}
-
-// ListVersions 列出版本号列表。
-func (s *StoreInstance) ListVersions(ctx context.Context, key microConfig.Key, limit int) ([]string, error) {
-	// key 不合法时直接返回统一错误。
-	if err := validateKey(key); err != nil {
-		return nil, err
-	}
-
-	// 使用超时上下文执行读取。
-	reqCtx, cancel := s.withTimeout(ctx)
-	defer cancel()
-
-	// 读取 versions ConfigMap。
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(reqCtx, s.versionsName(key), metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return []string{}, nil
-		}
-		return nil, err
-	}
-	if cm.Data == nil {
-		return []string{}, nil
-	}
-
-	// 提取版本号列表。
-	versions := make([]string, 0, len(cm.Data))
-	for version := range cm.Data {
-		versions = append(versions, version)
-	}
-
-	// 按字典序倒排，确保新版本优先。
-	sort.Sort(sort.Reverse(sort.StringSlice(versions)))
-
-	// 按 limit 截断结果。
-	if limit > 0 && len(versions) > limit {
-		versions = versions[:limit]
-	}
-	return versions, nil
-}
-
-// GetMeta 读取配置元信息。
-func (s *StoreInstance) GetMeta(ctx context.Context, key microConfig.Key) (*microConfig.Meta, error) {
-	// key 不合法时直接返回统一错误。
-	if err := validateKey(key); err != nil {
-		return nil, err
-	}
-
-	// 使用超时上下文执行读取。
-	reqCtx, cancel := s.withTimeout(ctx)
-	defer cancel()
-
-	// 读取 meta ConfigMap。
-	cm, err := s.client.CoreV1().ConfigMaps(s.namespace).Get(reqCtx, s.metaName(key), metav1.GetOptions{})
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, microConfig.ErrResourceNotFound
-		}
-		return nil, err
-	}
-
-	// 从固定数据键提取内容。
-	raw, ok := cm.Data[dataKeyMeta]
-	if !ok || raw == "" {
-		return nil, microConfig.ErrResourceNotFound
-	}
-
-	// 解析并返回元信息。
-	return s.decodeMeta([]byte(raw))
-}
-
-// PutMeta 写入配置元信息。
-func (s *StoreInstance) PutMeta(ctx context.Context, key microConfig.Key, meta *microConfig.Meta) error {
-	// key 不合法时直接返回统一错误。
-	if err := validateKey(key); err != nil {
-		return err
-	}
-	// meta 为空时返回统一错误。
-	if meta == nil {
-		return microConfig.ErrInvalidRaw
-	}
-
-	// 编码元信息。
-	val, err := s.encodeMeta(meta)
-	if err != nil {
-		return err
-	}
-
-	// 使用超时上下文执行写入。
-	reqCtx, cancel := s.withTimeout(ctx)
-	defer cancel()
-
-	// 确保 meta ConfigMap 存在并更新数据。
-	return s.upsertConfigMapData(reqCtx, s.metaName(key), map[string]string{
-		dataKeyMeta: string(val),
-	}, map[string]string{
-		"type": "meta",
-	})
-}
-
 // withTimeout 基于 options.Timeout 包装上下文。
 func (s *StoreInstance) withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
 	// 空上下文回退为 Background。
@@ -354,16 +161,6 @@ func (s *StoreInstance) withTimeout(ctx context.Context) (context.Context, conte
 // currentName 生成 current ConfigMap 名称。
 func (s *StoreInstance) currentName(key microConfig.Key) string {
 	return fmt.Sprintf("cfg-current-%s", shortHash(buildKeySignature(key)))
-}
-
-// versionsName 生成 versions ConfigMap 名称。
-func (s *StoreInstance) versionsName(key microConfig.Key) string {
-	return fmt.Sprintf("cfg-versions-%s", shortHash(buildKeySignature(key)))
-}
-
-// metaName 生成 meta ConfigMap 名称。
-func (s *StoreInstance) metaName(key microConfig.Key) string {
-	return fmt.Sprintf("cfg-meta-%s", shortHash(buildKeySignature(key)))
 }
 
 // buildKeySignature 构造稳定的键签名字符串。
@@ -449,34 +246,6 @@ func (s *StoreInstance) encodeRaw(raw *microConfig.Raw) ([]byte, error) {
 func (s *StoreInstance) decodeRaw(data []byte) (*microConfig.Raw, error) {
 	// 准备承载结果对象。
 	raw := new(microConfig.Raw)
-	// 优先使用调用方注入的编解码器。
-	if s.options != nil && s.options.Codec != nil {
-		if err := s.options.Codec.Unmarshal(data, raw); err != nil {
-			return nil, err
-		}
-		return raw, nil
-	}
-	// 默认使用 JSON 解码。
-	if err := json.Unmarshal(data, raw); err != nil {
-		return nil, err
-	}
-	return raw, nil
-}
-
-// encodeMeta 对元信息做编码。
-func (s *StoreInstance) encodeMeta(meta *microConfig.Meta) ([]byte, error) {
-	// 优先使用调用方注入的编解码器。
-	if s.options != nil && s.options.Codec != nil {
-		return s.options.Codec.Marshal(meta)
-	}
-	// 默认使用 JSON 编码。
-	return json.Marshal(meta)
-}
-
-// decodeMeta 对元信息做解码。
-func (s *StoreInstance) decodeMeta(data []byte) (*microConfig.Meta, error) {
-	// 准备承载结果对象。
-	raw := new(microConfig.Meta)
 	// 优先使用调用方注入的编解码器。
 	if s.options != nil && s.options.Codec != nil {
 		if err := s.options.Codec.Unmarshal(data, raw); err != nil {

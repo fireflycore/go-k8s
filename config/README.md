@@ -1,26 +1,26 @@
 # config
 
-`go-k8s/config` 是 `go-micro/config` 的 Kubernetes 实现，使用 ConfigMap 提供统一的配置存储与监听能力。
+`go-k8s/config` 是 `go-micro/config` 的 Kubernetes 实现，使用 ConfigMap 提供最小数据面配置存储与监听能力。
 
 > 当前主线口径：在配置中心主线交付中，`go-k8s/config` 对应 `K8s + Istio` 场景。它与 `go-consul/config` 共享统一契约，但不是要求同一个运行时产物同时引入两套实现。
+>
+> 当前版本口径：本包已对齐 `github.com/fireflycore/go-micro@v1.3.6`，`Store` 只保留 `Get / Put / Delete`，监听能力由独立 `Watcher` 接口承载。
 
 ## 能力范围
 
-- `Store`：`Get/GetByQuery/Put/Delete`
-- 版本能力：`PutVersion/GetVersion/ListVersions`
-- 元信息能力：`GetMeta/PutMeta`
+- `Store`：`Get/Put/Delete`
 - `Watcher`：`Watch/Unwatch`（基于 ConfigMap Watch）
 - `loader` 辅助：`NewStoreFromLoader`、`LoadConfigFromStore`
 
 ## 存储模型
 
-同一条配置键会映射到三个 ConfigMap：
+同一条配置键会映射到一个 current ConfigMap：
 
-- current：保存当前生效配置（`data.item`）
-- versions：保存历史版本快照（`data.{version}`）
-- meta：保存版本游标元信息（`data.meta`）
+- current：保存当前生效配置（`data.raw`）
 
 ConfigMap 名称采用稳定哈希生成，避免超过 K8s 资源名限制。
+
+> 历史版本、发布流水和元信息游标不再保存在 ConfigMap 中，由控制面数据库统一承接。
 
 ## Loader 辅助
 
