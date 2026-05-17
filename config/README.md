@@ -39,6 +39,36 @@ ConfigMap 名称采用稳定哈希生成，避免超过 K8s 资源名限制。
 - 需要统一 cache / watch 行为时，优先使用 `NewClient`
 - 只需要最小直连读写能力时，继续使用 `Store`
 
+## Watch 与协程数量
+
+`go-k8s/config` 里的后台 watch 也是按 `WatchScope` 去重启动的，但和 Consul 不同，当前实现会把 `Group` 与 `App` 两种 scope 都收敛到 namespace 级共享 watch。
+
+前提：
+
+- 只有 `EnableCache=true`
+- 且 `WatchMode=On`
+- 且对应 key 至少被 `Client.Get(...)` 成功读取过一次
+
+满足上面条件后，后台才会为该 key 所属 scope 挂 watch。
+
+当前规则：
+
+- `WatchScopePerKey`：一个 key 起 `1` 个协程
+- `WatchScopeGroup`：同一个 namespace 下，不管有多少个 key，只起 `1` 个协程
+- `WatchScopeApp`：同一个 namespace 下，不管有多少个 key，也只起 `1` 个协程
+
+例子：
+
+- 同一个 namespace 下 100 个 key，默认不会起 100 个，当前只起 `1` 个协程
+- 如果显式使用 `WatchScopePerKey`，100 个 key 就会起 `100` 个协程
+- 如果这些 key 还没被 `Client.Get(...)` 读过，则不会提前创建对应 watch
+
+说明：
+
+- 当前默认 `WatchScope` 来自 `go-micro/config`，默认值是 `WatchScopeGroup`
+- 在 `go-k8s/config` 里，`WatchScopeGroup` 和 `WatchScopeApp` 当前都会复用 namespace 级共享 watch
+- 当前实现还没有额外的 `Close` 生命周期接口，因此 watch goroutine 一旦启动，会跟随进程生命周期持续存在
+
 ## 加密语义
 
 - `go-k8s/config` 遵循 `go-micro/config` 的统一加密语义。
