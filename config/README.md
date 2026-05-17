@@ -22,7 +22,7 @@
 
 - current：保存当前生效配置（`data.raw`）
 
-ConfigMap 名称采用稳定哈希生成，避免超过 K8s 资源名限制。
+ConfigMap 名称采用稳定哈希生成，基于 `tenant/app/env/group/name` 构造签名，避免超过 K8s 资源名限制。
 
 > 历史版本、发布流水和元信息游标不再保存在 ConfigMap 中，由控制面数据库统一承接。
 

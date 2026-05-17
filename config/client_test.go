@@ -54,6 +54,13 @@ func TestBuildK8sClientScope(t *testing.T) {
 	}
 }
 
+func TestBuildKeySignature(t *testing.T) {
+	key := testKey("redis")
+	if got := buildKeySignature(key); got != "default|app|prod|database|redis" {
+		t.Fatalf("buildKeySignature() = %q", got)
+	}
+}
+
 func TestClientCacheExpiresAfterTTL(t *testing.T) {
 	// 使用极短 TTL，直接依赖真实时钟验证失效行为。
 	client := newTestClient(

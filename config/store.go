@@ -169,7 +169,7 @@ func buildKeySignature(key microConfig.Key) string {
 	if tenant == "" {
 		tenant = "default"
 	}
-	return fmt.Sprintf("%s|%s|%s|%s|%s", tenant, key.Env, key.AppId, key.Group, key.Name)
+	return fmt.Sprintf("%s|%s|%s|%s|%s", tenant, key.AppId, key.Env, key.Group, key.Name)
 }
 
 // shortHash 生成短哈希字符串，用于构造合法资源名。
