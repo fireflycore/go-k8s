@@ -5,6 +5,8 @@
 > 当前主线口径：在配置中心主线交付中，`go-k8s/config` 对应 `K8s + Istio` 场景。它与 `go-consul/config` 共享统一契约，但不是要求同一个运行时产物同时引入两套实现。
 >
 > 当前版本口径：本包已对齐 `github.com/fireflycore/go-micro@v1.5.4`，`Store` 只保留 `Get / Put / Delete`，监听能力由独立 `Watcher` 接口承载。
+>
+> 后续 cache / watch / `manage/client` 重构，统一以设计库 `design/config/plan/go-micro-config-manage-client-refactor-plan.md` 为基线。
 
 ## 能力范围
 
