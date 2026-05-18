@@ -96,12 +96,12 @@ func newTestClient(opts ...microConfig.ClientOption) *ClientInstance {
 	}
 }
 
-func testKey(name string) microConfig.Key {
+func testKey(key string) microConfig.Key {
 	// testKey 统一返回一条稳定 key，减少各个用例里的重复样板。
 	return microConfig.Key{
 		Env:   "prod",
 		AppId: "app",
 		Group: "database",
-		Name:  name,
+		Key:   key,
 	}
 }

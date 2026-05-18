@@ -165,11 +165,7 @@ func (s *StoreInstance) currentName(key microConfig.Key) string {
 
 // buildKeySignature 构造稳定的键签名字符串。
 func buildKeySignature(key microConfig.Key) string {
-	tenant := strings.TrimSpace(key.TenantId)
-	if tenant == "" {
-		tenant = "default"
-	}
-	return fmt.Sprintf("%s|%s|%s|%s|%s", tenant, key.AppId, key.Env, key.Group, key.Name)
+	return fmt.Sprintf("%s|%s|%s|%s", key.AppId, key.Env, key.Group, key.Key)
 }
 
 // shortHash 生成短哈希字符串，用于构造合法资源名。
@@ -274,8 +270,8 @@ func validateKey(key microConfig.Key) error {
 	if strings.TrimSpace(key.Group) == "" {
 		return microConfig.ErrInvalidKey
 	}
-	// Name 为空时视为无效 key。
-	if strings.TrimSpace(key.Name) == "" {
+	// Key 为空时视为无效 key。
+	if strings.TrimSpace(key.Key) == "" {
 		return microConfig.ErrInvalidKey
 	}
 	// key 校验通过。
