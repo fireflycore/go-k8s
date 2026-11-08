@@ -160,12 +160,15 @@ func (s *StoreInstance) withTimeout(ctx context.Context) (context.Context, conte
 
 // currentName 生成 current ConfigMap 名称。
 func (s *StoreInstance) currentName(key microConfig.Key) string {
+	if strings.TrimSpace(key.Namespace) == "" {
+		key.Namespace = s.namespace
+	}
 	return fmt.Sprintf("cfg-current-%s", shortHash(buildKeySignature(key)))
 }
 
 // buildKeySignature 构造稳定的键签名字符串。
 func buildKeySignature(key microConfig.Key) string {
-	return fmt.Sprintf("%s|%s|%s|%s", key.AppId, key.Env, key.Group, key.Key)
+	return fmt.Sprintf("%s|%s|%s|%s|%s", key.Namespace, key.AppId, key.Env, key.Group, key.Key)
 }
 
 // shortHash 生成短哈希字符串，用于构造合法资源名。

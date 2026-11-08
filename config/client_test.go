@@ -61,6 +61,16 @@ func TestBuildKeySignature(t *testing.T) {
 	}
 }
 
+func TestCurrentNameUsesStoreNamespaceWhenKeyNamespaceEmpty(t *testing.T) {
+	store := &StoreInstance{namespace: "default"}
+	key := testKey("redis")
+	key.Namespace = ""
+
+	if got, want := store.currentName(key), "cfg-current-"+shortHash("default|app|prod|database|redis"); got != want {
+		t.Fatalf("currentName() = %q, want %q", got, want)
+	}
+}
+
 func TestClientCacheExpiresAfterTTL(t *testing.T) {
 	// 使用极短 TTL，直接依赖真实时钟验证失效行为。
 	client := newTestClient(
@@ -99,9 +109,10 @@ func newTestClient(opts ...microConfig.ClientOption) *ClientInstance {
 func testKey(key string) microConfig.Key {
 	// testKey 统一返回一条稳定 key，减少各个用例里的重复样板。
 	return microConfig.Key{
-		Env:   "prod",
-		AppId: "app",
-		Group: "database",
-		Key:   key,
+		Namespace: "default",
+		Env:       "prod",
+		AppId:     "app",
+		Group:     "database",
+		Key:       key,
 	}
 }
